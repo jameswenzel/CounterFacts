@@ -11,3 +11,6 @@ url = https://github.com/emo-eth/create2-helpers
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/corruptions-font"]
+	path = lib/corruptions-font
+	url = https://github.com/emo-eth/corruptions-font
