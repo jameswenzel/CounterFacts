@@ -5,6 +5,7 @@ import { ERC721 } from "solady/tokens/ERC721.sol";
 import { SSTORE2 } from "solady/utils/SSTORE2.sol";
 import { Base64 } from "solady/utils/Base64.sol";
 import { LibString } from "solady/utils/LibString.sol";
+import { Corruptions } from "corruptions-font/Corruptions.sol";
 
 /**
  * @title Counterfacts™
@@ -263,9 +264,11 @@ contract Counterfacts is ERC721 {
         string memory color = colors[colorIndex];
 
         return string.concat(
-            '<svg xmlns="http://www.w3.org/2000/svg" style="background:#112" viewBox="0 0 700 300"><path id="a" fill="#112" d="M20 10h655a10 10 0 0 1 10 10v260a20 10 0 0 1-10 10H20a20 10 0 0 1-10-10V10z"/><text fill="',
+            '<svg xmlns="http://www.w3.org/2000/svg" style="background:#112" viewBox="0 0 700 300"><path id="a" fill="#112" d="M20 10h655a10 10 0 0 1 10 10v260a20 10 0 0 1-10 10H20a20 10 0 0 1-10-10V10z"/>    <style type="text/css"> @font-face { font-family: Font-Name; src: url(',
+            Corruptions.load(),
+            ');     } </style><text fill="',
             color,
-            '" dominant-baseline="middle" font-family="Menlo,monospace" font-size="12"><textPath href="#a"><![CDATA[ ',
+            '" dominant-baseline="middle" font-family="Corruptions" font-size="12"><textPath href="#a"><![CDATA[ ',
             _generateMarquee(creator, mintTime, validationHash, dataContract),
             ']]></textPath></text><path fill="rgba(0,0,0,0)" stroke="',
             color,
