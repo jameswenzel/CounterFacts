@@ -31,6 +31,9 @@ contract Counterfacts is ERC721 {
 
     uint256 public constant MINT_DELAY = 1 minutes;
     uint256 internal constant UINT96_MASK = 0xffffffffffffffffffffffff;
+    uint160 internal constant ADDRESS_MASK =
+        uint160(0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF);
+    uint256 internal constant ID_SHIFT = 160;
 
     struct MintMetadata {
         address creator;
@@ -38,8 +41,10 @@ contract Counterfacts is ERC721 {
         bytes32 validationHash;
     }
 
-    uint256 public nextTokenId;
-    mapping(uint256 tokenId => MintMetadata metadata) internal _mintMetadata;
+    uint256 public nextTokenSerial;
+    // mapping(uint256 tokenId => MintMetadata metadata) internal _mintMetadata;
+    mapping(uint256 tokenId => bytes32 validationHash) internal
+        _validationHashes;
     mapping(uint256 tokenId => address dataContractAddress) internal
         _dataContractAddresses;
 
@@ -64,10 +69,7 @@ contract Counterfacts is ERC721 {
         returns (address creator, uint256 mintTime, bytes32 validationHash)
     {
         _assertExists(tokenId);
-        MintMetadata storage metadata = _mintMetadata[tokenId];
-        creator = metadata.creator;
-        mintTime = metadata.mintTime;
-        validationHash = metadata.validationHash;
+        (creator, mintTime, validationHash) = _mintMetadata(tokenId);
     }
 
     function dataContractAddress(uint256 tokenId)
@@ -96,14 +98,14 @@ contract Counterfacts is ERC721 {
      *        match, the reveal will revert.
      */
     function mint(bytes32 validationHash) public returns (uint256 tokenId) {
+        uint256 idNumber;
         // Increment tokenId before minting to avoid tokenId 0
         unchecked {
-            tokenId = ++nextTokenId;
+            idNumber = ++nextTokenSerial;
         }
-        MintMetadata storage metadata = _mintMetadata[tokenId];
-        metadata.creator = msg.sender;
-        metadata.mintTime = uint96(block.timestamp);
-        metadata.validationHash = validationHash;
+        tokenId = idNumber << ID_SHIFT | uint256(uint160(msg.sender));
+        _validationHashes[tokenId] = validationHash;
+        _setExtraData(tokenId, uint96(block.timestamp));
         _mint(msg.sender, tokenId);
     }
 
@@ -119,9 +121,8 @@ contract Counterfacts is ERC721 {
     {
         _assertExists(tokenId);
 
-        MintMetadata storage metadata = _mintMetadata[tokenId];
-        address creator = metadata.creator;
-        uint256 mintTime = metadata.mintTime;
+        address creator = _getCreator(tokenId);
+        uint256 mintTime = _getExtraData(tokenId);
 
         // enforce a delay to prevent front-running reveals by minting and then
         // immediately revealing
@@ -142,8 +143,9 @@ contract Counterfacts is ERC721 {
             mstore(0x20, creator)
             computedValidationHash := keccak256(0, 0x40)
         }
+
         // compare it to the one provided at mint time
-        bytes32 validationHash = metadata.validationHash;
+        bytes32 validationHash = _validationHashes[tokenId];
         // if they don't match, the wrong data has been provided
         if (validationHash != computedValidationHash) {
             revert IncorrectStorageAddress();
@@ -184,10 +186,9 @@ contract Counterfacts is ERC721 {
     {
         _assertExists(tokenId);
 
-        MintMetadata storage metadata = _mintMetadata[tokenId];
-        address creator = metadata.creator;
-        uint256 mintTime = metadata.mintTime;
-        bytes32 validationHash = metadata.validationHash;
+        address creator = _getCreator(tokenId);
+        uint256 mintTime = _getExtraData(tokenId);
+        bytes32 validationHash = _validationHashes[tokenId];
 
         address dataContract = _dataContractAddresses[tokenId];
         string memory rawString;
@@ -195,7 +196,7 @@ contract Counterfacts is ERC721 {
         if (dataContract != address(0)) {
             // escape HTML to avoid embedding of non-text content
 
-            rawString = string(SSTORE2.read(dataContract));
+            rawString = LibString.escapeHTML(string(SSTORE2.read(dataContract)));
 
             // revealed tokens should specify "Yes" for revealed and the data
             // contract address
@@ -214,6 +215,7 @@ contract Counterfacts is ERC721 {
             Base64.encode(
                 bytes(
                     _tokenSVG(
+                        tokenId,
                         creator,
                         mintTime,
                         validationHash,
@@ -249,12 +251,13 @@ contract Counterfacts is ERC721 {
      * @param rawContent Unescaped content to display in the Counterfact™
      */
     function _tokenSVG(
+        uint256 tokenId,
         address creator,
         uint256 mintTime,
         bytes32 validationHash,
         address dataContract,
         string memory rawContent
-    ) internal pure returns (string memory) {
+    ) internal view returns (string memory) {
         // escape content for use in xml
         string memory escaped = LibString.escapeHTML(rawContent);
         // pick a color based on the validation hash
@@ -264,17 +267,19 @@ contract Counterfacts is ERC721 {
         string memory color = colors[colorIndex];
 
         return string.concat(
-            '<svg xmlns="http://www.w3.org/2000/svg" style="background:#112" viewBox="0 0 700 300"><path id="a" fill="#112" d="M20 10h655a10 10 0 0 1 10 10v260a20 10 0 0 1-10 10H20a20 10 0 0 1-10-10V10z"/>    <style type="text/css"> @font-face { font-family: Font-Name; src: url(',
+            '<svg xmlns="http://www.w3.org/2000/svg" style="background:#112" viewBox="0 0 700 300"><path id="a" fill="#112" d="M20 10h655a10 10 0 0 1 10 10v260a20 10 0 0 1-10 10H25a20 10 0 0 1-10-10V10z"/>    <style type="text/css"> @font-face { font-family: Corruptions; src: url(',
             Corruptions.load(),
             ');     } </style><text fill="',
             color,
             '" dominant-baseline="middle" font-family="Corruptions" font-size="12"><textPath href="#a"><![CDATA[ ',
-            _generateMarquee(creator, mintTime, validationHash, dataContract),
+            _generateMarquee(
+                tokenId, creator, mintTime, validationHash, dataContract
+            ),
             ']]></textPath></text><path fill="rgba(0,0,0,0)" stroke="',
             color,
-            '" d="M20 20h645a10 10 0 0 1 10 10v240a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10V20z"/><foreignObject x="40" y="15" width="85%" height="85%"><div style="font-family:Menlo,monospace;color:#fff;display:flex;align-items:center;justify-content:left;font-size:0.8em;"  xmlns="http://www.w3.org/1999/xhtml"><p>',
+            '" d="M30 20h635a10 10 0 0 1 10 10v240a10 10 0 0 1-10 10H35a10 10 0 0 1-10-10V20z"/><foreignObject x="30" y="25" width="650" height="250"><style>div {display: table;font-family: Corruptions;font-size: 10px;width: 100%;height: 100%;}p {display: table-cell;text-align: left;vertical-align: top;color: #fff;}</style><body xmlns="http://www.w3.org/1999/xhtml"><div><p>',
             escaped,
-            "</p></div></foreignObject></svg>"
+            "</p></div></body></foreignObject></svg>"
         );
     }
 
@@ -282,6 +287,7 @@ contract Counterfacts is ERC721 {
      * @dev Generate the marquee border text for a Counterfact™
      */
     function _generateMarquee(
+        uint256 tokenId,
         address creator,
         uint256 mintTime,
         bytes32 validationHash,
@@ -290,6 +296,8 @@ contract Counterfacts is ERC721 {
         result = string.concat(
             "Creator: ",
             LibString.toHexString(uint256(uint160(creator)), 20),
+            " Serial: #",
+            LibString.toString(tokenId >> ID_SHIFT),
             " Mint Timestamp: ",
             LibString.toString(mintTime),
             " Validation Hash: ",
@@ -325,5 +333,23 @@ contract Counterfacts is ERC721 {
         if (!(_exists(tokenId))) {
             revert TokenDoesNotExist();
         }
+    }
+
+    function _getCreator(uint256 tokenId) internal pure returns (address) {
+        // mask out the tokenId to get the creator address – this is still
+        // necessary in solc 0.8.24 for some reason; casting twice does not
+        // actually mask the value
+        return address(uint160(tokenId & ADDRESS_MASK));
+    }
+
+    function _mintMetadata(uint256 tokenId)
+        internal
+        view
+        returns (address, uint96, bytes32)
+    {
+        address creator = _getCreator(tokenId);
+        uint96 mintTime = _getExtraData(tokenId);
+        bytes32 validationhash = _validationHashes[tokenId];
+        return (creator, mintTime, validationhash);
     }
 }

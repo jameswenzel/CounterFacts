@@ -4,9 +4,10 @@ out = 'out'
 libs = ['lib']
 bytecode_hash = 'none'
 remappings = [
-    'solady/=lib/solady/src/',
-    'create2-scripts/=lib/create2-helpers/script/',
-    'corruptions-font/=lib/corruptions-font/src/',
+    'solady/=dependencies/solady-0.0.208/src/',
+    'corruptions-font/=dependencies/corruptions-font-0.0.2/src/',
+    'forge-std/=dependencies/forge-std-1.8.2/src/',
+    'onchain/=dependencies/onchain-0.0.2/src/',
 ]
 optimizer_runs = 4_294_967_295
 fs_permissions = [{ access = "read-write", path = './' }]
@@ -25,3 +26,9 @@ line_length = 80
 runs = 10000
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
+
+[dependencies]
+solady = { version = "0.0.208" }
+corruptions-font = { version = "0.0.2" }
+forge-std = { version = "1.8.2" }
+onchain = { version = "0.0.2" }

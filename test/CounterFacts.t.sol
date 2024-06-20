@@ -139,13 +139,14 @@ contract CounterfactsTest is BaseTest {
     function testDataContractAddress() public {
         address predicted = counter.predict("data", address(this), 0);
         // mint
-        counter.mint(keccak256(abi.encode(predicted, address(this))));
+        uint256 tokenId =
+            counter.mint(keccak256(abi.encode(predicted, address(this))));
         // warp
         vm.warp(block.timestamp + 60);
         // reveal
-        counter.reveal(1, "data", 0);
+        counter.reveal(tokenId, "data", 0);
         assertEq(
-            counter.dataContractAddress(1),
+            counter.dataContractAddress(tokenId),
             predicted,
             "dataContractAddress != predicted"
         );
@@ -160,13 +161,14 @@ contract CounterfactsTest is BaseTest {
         address predicted = counter.predict("data", creator, salt);
         // mint
         vm.prank(creator);
-        counter.mint(keccak256(abi.encode(predicted, creator)));
+        uint256 tokenId =
+            counter.mint(keccak256(abi.encode(predicted, creator)));
         // warp
         vm.warp(block.timestamp + 60);
         // reveal
-        counter.reveal(1, "data", salt);
+        counter.reveal(tokenId, "data", salt);
         assertEq(
-            counter.dataContractAddress(1),
+            counter.dataContractAddress(tokenId),
             predicted,
             "dataContractAddress != predicted"
         );
@@ -362,33 +364,4 @@ contract CounterfactsTest is BaseTest {
         emit log_named_string("trait_type", attr.trait_type);
         emit log_named_string("value", attr.value);
     }
-    // function testSneaky() public {
-    //     uint256 tokenId = counter.mint(address(1234));
-    //     counter.setDataContract(
-    //         tokenId,
-    //         Counterfacts.DataContract({
-    //             dataContract: address(this),
-    //             deployed: false
-    //         })
-    //     );
-
-    //     string memory uri = counter.stringURI(tokenId);
-    //     assertEq(
-    //         bytes(uri),
-    //         '{"animation_url":"data:text/plain,Very
-    // sneaky!","attributes":[{"trait_type":"Creator","value":"The
-    // Sneakooooor"},{"trait_type":"Data
-    // Contract","value":"0x7fa9385be102ac3eac297483dd6233d62b3e1496"},
-    // {"trait_type":"Sneaky","value":"Yes"}]}'
-    //     );
-    // }
-
-    // function testConstructorMint() public {
-    //     ConstructorMinter minter = new ConstructorMinter(address(counter));
-    //     assertEq(counter.ownerOf(1), address(minter));
-    //     assertEq(
-    //         bytes(counter.tokenURI(1)),
-    //         "data:application/json;base64,eyJhbmltYXRpb25fdXJsIjoiZGF0YTp0ZXh0L3BsYWluLFZlcnkgc25lYWt5ISIsImF0dHJpYnV0ZXMiOlt7InRyYWl0X3R5cGUiOiJDcmVhdG9yIiwidmFsdWUiOiJUaGUgU25lYWtvb29vb3IifSx7InRyYWl0X3R5cGUiOiJEYXRhIENvbnRyYWN0IiwidmFsdWUiOiIweDJlMjM0ZGFlNzVjNzkzZjY3YTM1MDg5YzlkOTkyNDVlMWM1ODQ3MGIifSwgeyJ0cmFpdF90eXBlIjoiU25lYWt5IiwidmFsdWUiOiJZZXMifV19"
-    //     );
-    // }
 }

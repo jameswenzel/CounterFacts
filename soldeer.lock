@@ -1,0 +1,24 @@
+
+[[dependencies]]
+name = "solady"
+version = "0.0.208"
+source = "https://soldeer-revisions.s3.amazonaws.com/solady/0_0_208_13-06-2024_09:02:16_solady.zip"
+checksum = "41f2a4c3a72f89363e4e53707dbe500d54a8cdc24d0ed0637a5bd3e367cedae2"
+
+[[dependencies]]
+name = "corruptions-font"
+version = "0.0.2"
+source = "https://soldeer-revisions.s3.amazonaws.com/corruptions-font/0_0_2_19-06-2024_18:46:44_corruptions-font.zip"
+checksum = "ef959402803654f358c7fbcbdd9cdd2b8da604ded5f11fd8085f54907ee54efd"
+
+[[dependencies]]
+name = "forge-std"
+version = "1.8.2"
+source = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_8_2_19-05-2024_18:52:07_forge-std-1.8.2.zip"
+checksum = "88a37e1d79f60b8aad08c7bd50a7a5ef973fc172b1495028d0725a17f5a4976c"
+
+[[dependencies]]
+name = "onchain"
+version = "0.0.2"
+source = "https://soldeer-revisions.s3.amazonaws.com/onchain/0_0_2_19-06-2024_19:46:04_onchain.zip"
+checksum = "f21914b85c6b5c0026ca5bbab501ba897bcc0fa5fee85d5f6d13af09af88dbc6"

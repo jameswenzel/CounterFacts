@@ -5,10 +5,13 @@ import { Counterfacts } from "../../src/Counterfacts.sol";
 import { SSTORE2 } from "solady/utils/SSTORE2.sol";
 
 contract TestCounterfacts is Counterfacts {
-    function setMetadata(uint256 tokenId, Counterfacts.MintMetadata memory data)
-        public
-    {
-        _mintMetadata[tokenId] = data;
+    function setMetadata(
+        uint256 tokenId,
+        bytes32 validationHash,
+        uint96 mintTime
+    ) public {
+        _validationHashes[tokenId] = validationHash;
+        _setExtraData(tokenId, mintTime);
     }
 
     function setDataContract(uint256 tokenId, address data) public {
@@ -16,8 +19,9 @@ contract TestCounterfacts is Counterfacts {
     }
 
     function getTokenSVG(uint256 tokenId) public view returns (string memory) {
-        MintMetadata storage metadata = _mintMetadata[tokenId];
-
+        address creator = _getCreator(tokenId);
+        uint96 mintTime = _getExtraData(tokenId);
+        bytes32 validationHash = _validationHashes[tokenId];
         address dataContract = _dataContractAddresses[tokenId];
 
         string memory rawString = "This Counterfact has not yet been revealed.";
@@ -26,9 +30,10 @@ contract TestCounterfacts is Counterfacts {
         }
 
         return _tokenSVG({
-            creator: metadata.creator,
-            mintTime: metadata.mintTime,
-            validationHash: metadata.validationHash,
+            tokenId: tokenId,
+            creator: creator,
+            mintTime: mintTime,
+            validationHash: validationHash,
             dataContract: dataContract,
             rawContent: rawString
         });
