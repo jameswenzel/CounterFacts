@@ -6,6 +6,8 @@ import { SSTORE2 } from "solady/utils/SSTORE2.sol";
 import { Base64 } from "solady/utils/Base64.sol";
 import { LibString } from "solady/utils/LibString.sol";
 import { Corruptions } from "corruptions-font/Corruptions.sol";
+import { Metadata } from "onchain/Metadata.sol";
+import { Json } from "onchain/Json.sol";
 
 /**
  * @title Counterfacts™
