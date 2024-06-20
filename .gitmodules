@@ -1,3 +1,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "lib/onchain"]
+	path = lib/onchain
+	url = https://github.com/emo-eth/onchain
