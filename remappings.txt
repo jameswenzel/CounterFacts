@@ -1,2 +1,5 @@
-ds-test/=lib/forge-std/lib/ds-test/src/
-forge-std/=lib/forge-std/src/
+solady/=dependencies/solady-0.0.208/src/
+corruptions-font/=dependencies/corruptions-font-0.0.2/src/
+forge-std/=dependencies/forge-std-1.8.2/src/
+onchain/=dependencies/onchain-0.0.2/src/
+solarray/=dependencies/onchain-0.0.2/lib/solarray/src/

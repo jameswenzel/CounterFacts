@@ -5,7 +5,7 @@ import { BaseTest } from "./BaseTest.sol";
 import { ERC721 } from "solady/tokens/ERC721.sol";
 import { console2 } from "forge-std/Test.sol";
 import { TestCounterfacts } from "./helpers/TestCounterfacts.sol";
-import { Counterfacts } from "../src/Counterfacts.sol";
+import { CounterFacts } from "../src/CounterFacts.sol";
 import { LibString } from "solady/utils/LibString.sol";
 import { Base64 } from "solady/utils/Base64.sol";
 import { ConstructorMinter } from "./helpers/ConstructorMinter.sol";
@@ -15,11 +15,6 @@ contract CounterfactsTest is BaseTest {
     TestCounterfacts counter;
 
     event MetadataUpdate(uint256 _tokenId);
-
-    struct Attribute {
-        string trait_type;
-        string value;
-    }
 
     struct RevealedMetadata {
         string animation_url;
@@ -35,12 +30,14 @@ contract CounterfactsTest is BaseTest {
     function testMintPackUnpack(
         address creator,
         uint96 timestamp,
-        bytes32 validationHash
+        address storageAddress
     ) public {
         creator = coerce(creator);
         vm.warp(timestamp);
         vm.prank(creator);
-        uint256 tokenId = counter.mint(validationHash);
+        bytes32 validationHash =
+            keccak256(abi.encodePacked(creator, storageAddress));
+        uint256 tokenId = counter.mint(storageAddress);
         (address _creator, uint256 _timestamp, bytes32 _validation) =
             counter.mintMetadata(tokenId);
         assertEq(_creator, creator, "creator != creator");
@@ -50,7 +47,7 @@ contract CounterfactsTest is BaseTest {
     }
 
     function testGetTokenSVG() public {
-        uint256 tokenId = counter.mint(bytes32(uint256(1234)));
+        uint256 tokenId = counter.mint(address(uint160(1234)));
         assertEq(counter.ownerOf(tokenId), address(this));
         string memory svg = counter.getTokenSVG(tokenId);
         vm.writeFile("x.svg", svg);
@@ -58,7 +55,7 @@ contract CounterfactsTest is BaseTest {
         string memory data =
             "this is a really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really really long string";
         address predicted = counter.predict(data, address(this), 0);
-        tokenId = counter.mint(keccak256(abi.encode(predicted, address(this))));
+        tokenId = counter.mint(predicted);
         vm.warp(block.timestamp + 120);
 
         counter.reveal(tokenId, data, 0);
@@ -100,8 +97,7 @@ contract CounterfactsTest is BaseTest {
 
     function testReveal() public {
         address predicted = counter.predict("data", address(this), 0);
-        uint256 tokenId =
-            counter.mint(keccak256(abi.encode(predicted, address(this))));
+        uint256 tokenId = counter.mint(predicted);
         vm.warp(block.timestamp + 60);
         vm.expectEmit(true, false, false, false, address(counter));
         emit MetadataUpdate(tokenId);
@@ -116,17 +112,16 @@ contract CounterfactsTest is BaseTest {
     }
 
     function testReveal_IncorrectStorageAddress() public {
-        uint256 tokenId = counter.mint(bytes32(0));
+        uint256 tokenId = counter.mint(address(uint160(0)));
         vm.warp(block.timestamp + 60);
-        vm.expectRevert(Counterfacts.IncorrectStorageAddress.selector);
+        vm.expectRevert(CounterFacts.IncorrectStorageAddress.selector);
         counter.reveal(tokenId, "data", 0);
     }
 
     function testReveal_InsufficientTimePassed() public {
         address predicted = counter.predict("data", address(this), 0);
-        uint256 tokenId =
-            counter.mint(keccak256(abi.encode(predicted, address(this))));
-        vm.expectRevert(Counterfacts.InsufficientTimePassed.selector);
+        uint256 tokenId = counter.mint(predicted);
+        vm.expectRevert(CounterFacts.InsufficientTimePassed.selector);
         counter.reveal(tokenId, "data", 0);
     }
 
@@ -139,8 +134,7 @@ contract CounterfactsTest is BaseTest {
     function testDataContractAddress() public {
         address predicted = counter.predict("data", address(this), 0);
         // mint
-        uint256 tokenId =
-            counter.mint(keccak256(abi.encode(predicted, address(this))));
+        uint256 tokenId = counter.mint(predicted);
         // warp
         vm.warp(block.timestamp + 60);
         // reveal
@@ -161,8 +155,7 @@ contract CounterfactsTest is BaseTest {
         address predicted = counter.predict("data", creator, salt);
         // mint
         vm.prank(creator);
-        uint256 tokenId =
-            counter.mint(keccak256(abi.encode(predicted, creator)));
+        uint256 tokenId = counter.mint(predicted);
         // warp
         vm.warp(block.timestamp + 60);
         // reveal
@@ -339,19 +332,28 @@ contract CounterfactsTest is BaseTest {
         }
     }
 
+    struct Attribute {
+        string trait_type;
+        string value;
+    }
+
     function testSimple() public {
         string memory jsonString =
-            '{"trait_type":"Creator","value":"b0x4a5439f888367f1c42c1659f25004838e80472d70cf0947a26f4f3e31337d8b5"}';
+            '{"trait_type":"Creator","value":" 0x28679A1a632125fbBf7A68d850E50623194A709E "}';
         bytes memory jsonBytes = vm.parseJson(jsonString);
-        emit log_string(string(jsonBytes));
         Attribute memory attr = abi.decode(jsonBytes, (Attribute));
-        logAttr(attr);
-
+        assertEq(attr.trait_type, "Creator");
+        assertEq(attr.value, " 0x28679A1a632125fbBf7A68d850E50623194A709E ");
         jsonString =
-            '[{"trait_type":"Creator","value":"hello"},{"trait_type":"Creator","value":"hello2"}]';
+            '[{"trait_type":"Creator","value":"hello"},{"trait_type":"Creator","value":"hello world"}]';
         jsonBytes = vm.parseJson(jsonString);
         Attribute[] memory attrs = abi.decode(jsonBytes, (Attribute[]));
 
+        assertEq(attrs.length, 2);
+        assertEq(attrs[0].trait_type, "Creator");
+        assertEq(attrs[0].value, "hello");
+        assertEq(attrs[1].trait_type, "Creator");
+        assertEq(attrs[1].value, "hello world");
         // jsonString = string.concat(
         //     '{"animation_url":"hello","attributes":', jsonString, "}"
         // );

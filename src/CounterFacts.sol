@@ -6,7 +6,7 @@ import { SSTORE2 } from "solady/utils/SSTORE2.sol";
 import { Base64 } from "solady/utils/Base64.sol";
 import { LibString } from "solady/utils/LibString.sol";
 import { Corruptions } from "corruptions-font/Corruptions.sol";
-import { Metadata } from "onchain/Metadata.sol";
+import { Metadata, Solarray } from "onchain/Metadata.sol";
 import { Json } from "onchain/Json.sol";
 
 /**
@@ -25,7 +25,7 @@ import { Json } from "onchain/Json.sol";
  *         and the token will be updated to display the text the data contract
  *         contains.
  */
-contract Counterfacts is ERC721 {
+contract CounterFacts is ERC721 {
     error IncorrectStorageAddress();
     error InsufficientTimePassed();
 
@@ -43,10 +43,16 @@ contract Counterfacts is ERC721 {
         bytes32 validationHash;
     }
 
+    struct TokenMetadata {
+        address creator;
+        bytes32 validationHash;
+    }
+
     uint256 public nextTokenSerial;
     // mapping(uint256 tokenId => MintMetadata metadata) internal _mintMetadata;
-    mapping(uint256 tokenId => bytes32 validationHash) internal
-        _validationHashes;
+    // mapping(uint256 tokenId => bytes32 validationHash) internal
+    //     _validationHashes;
+    mapping(uint256 tokenId => TokenMetadata metadata) internal _tokenMetadata;
     mapping(uint256 tokenId => address dataContractAddress) internal
         _dataContractAddresses;
 
@@ -92,21 +98,29 @@ contract Counterfacts is ERC721 {
      * transaction front-run by a malicious actor, while still ensuring that the
      * creator has pre-written their Counterfact™, since it requires knowing the
      * data contract address in advance.
-     * @param validationHash The resultant hash of the counterfactual data
-     *        contract's address and the creator's address, calculated as
-     *        keccak256(abi.encode(dataContractAddress, creatorAddress)). Upon
-     *        revealing, the deployed data contract address will be hashed with
-     *        the creator's address and compared to this value. If they do not
-     *        match, the reveal will revert.
+     * @param storageAddress The address of the counterfactual data contract
+     *        that will be deployed. It will be hashed with the creator's
+     *        address to generate the validation hash. Upon revealing, the
+     *        deployed data contract address will be hashed with the creator's
+     *        address and compared to this value. If they do not match, the
+     *        reveal will revert.
      */
-    function mint(bytes32 validationHash) public returns (uint256 tokenId) {
+    function mint(address storageAddress) public returns (uint256 tokenId) {
         uint256 idNumber;
         // Increment tokenId before minting to avoid tokenId 0
         unchecked {
             idNumber = ++nextTokenSerial;
         }
         tokenId = idNumber << ID_SHIFT | uint256(uint160(msg.sender));
-        _validationHashes[tokenId] = validationHash;
+        bytes32 computedValidationHash;
+        assembly {
+            mstore(0x14, storageAddress)
+            mstore(0, caller())
+            computedValidationHash := keccak256(0xc, 0x28)
+        }
+        TokenMetadata storage metadata = _tokenMetadata[tokenId];
+        metadata.creator = msg.sender;
+        metadata.validationHash = computedValidationHash;
         _setExtraData(tokenId, uint96(block.timestamp));
         _mint(msg.sender, tokenId);
     }
@@ -123,7 +137,8 @@ contract Counterfacts is ERC721 {
     {
         _assertExists(tokenId);
 
-        address creator = _getCreator(tokenId);
+        TokenMetadata storage metadata = _tokenMetadata[tokenId];
+        address creator = metadata.creator;
         uint256 mintTime = _getExtraData(tokenId);
 
         // enforce a delay to prevent front-running reveals by minting and then
@@ -141,13 +156,13 @@ contract Counterfacts is ERC721 {
         bytes32 computedValidationHash;
         ///@solidity memory-safe-assembly
         assembly {
-            mstore(0, deployed)
-            mstore(0x20, creator)
-            computedValidationHash := keccak256(0, 0x40)
+            mstore(0x14, deployed)
+            mstore(0, creator)
+            computedValidationHash := keccak256(0xc, 0x28)
         }
 
         // compare it to the one provided at mint time
-        bytes32 validationHash = _validationHashes[tokenId];
+        bytes32 validationHash = metadata.validationHash;
         // if they don't match, the wrong data has been provided
         if (validationHash != computedValidationHash) {
             revert IncorrectStorageAddress();
@@ -188,18 +203,17 @@ contract Counterfacts is ERC721 {
     {
         _assertExists(tokenId);
 
-        address creator = _getCreator(tokenId);
         uint256 mintTime = _getExtraData(tokenId);
-        bytes32 validationHash = _validationHashes[tokenId];
+        TokenMetadata storage metadata = _tokenMetadata[tokenId];
+        address creator = metadata.creator;
+        bytes32 validationHash = metadata.validationHash;
 
         address dataContract = _dataContractAddresses[tokenId];
         string memory rawString;
         string memory revealedTraits = "";
         if (dataContract != address(0)) {
             // escape HTML to avoid embedding of non-text content
-
             rawString = LibString.escapeHTML(string(SSTORE2.read(dataContract)));
-
             // revealed tokens should specify "Yes" for revealed and the data
             // contract address
             revealedTraits = string.concat(
@@ -212,17 +226,20 @@ contract Counterfacts is ERC721 {
             // contract address
             revealedTraits = '"No"';
         }
-        string memory svg = string.concat(
-            "data:image/svg+xml;base64,",
-            Base64.encode(
-                bytes(
-                    _tokenSVG(
-                        tokenId,
-                        creator,
-                        mintTime,
-                        validationHash,
-                        dataContract,
-                        rawString
+
+        string memory svg = Metadata.base64SvgDataURI(
+            string.concat(
+                "data:image/svg+xml;base64,",
+                Base64.encode(
+                    bytes(
+                        _tokenSVG(
+                            tokenId,
+                            creator,
+                            mintTime,
+                            validationHash,
+                            dataContract,
+                            rawString
+                        )
                     )
                 )
             )
@@ -232,7 +249,7 @@ contract Counterfacts is ERC721 {
             svg,
             '"text":"',
             LibString.escapeJSON(rawString),
-            '","attributes":[{"trait_type":"Creator","value":"',
+            '","attributes":[{"trait_type":"Creator","value":" ',
             LibString.toHexString(uint256(uint160(creator)), 20),
             '"},{"trait_type":"Validation Hash","value":"',
             LibString.toHexString(uint256(validationHash), 32),
@@ -337,21 +354,13 @@ contract Counterfacts is ERC721 {
         }
     }
 
-    function _getCreator(uint256 tokenId) internal pure returns (address) {
-        // mask out the tokenId to get the creator address – this is still
-        // necessary in solc 0.8.24 for some reason; casting twice does not
-        // actually mask the value
-        return address(uint160(tokenId & ADDRESS_MASK));
-    }
-
     function _mintMetadata(uint256 tokenId)
         internal
         view
         returns (address, uint96, bytes32)
     {
-        address creator = _getCreator(tokenId);
+        TokenMetadata storage metadata = _tokenMetadata[tokenId];
         uint96 mintTime = _getExtraData(tokenId);
-        bytes32 validationhash = _validationHashes[tokenId];
-        return (creator, mintTime, validationhash);
+        return (metadata.creator, mintTime, metadata.validationHash);
     }
 }
